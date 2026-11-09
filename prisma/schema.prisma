@@ -1,0 +1,311 @@
+// Aduane data model.
+//
+// Design intent (from the brief):
+//  - Multi-user and multi-goal from day one; v1 just happens to have one user.
+//  - Ghana-first content: dishes carry a Cuisine so generation can rank Ghanaian first.
+//  - Creator content is schema'd now (recipes may belong to a Creator, videos carry a
+//    source + platform id) even though creator onboarding ships in v2.
+//  - Free/premium feature flags exist now (Entitlement) and are all unlocked in v1.
+//  - WeightLog exists for v2 progress tracking.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Sex {
+  MALE
+  FEMALE
+}
+
+enum Goal {
+  GAIN // healthy weight gain (v1 primary use case)
+  LOSE
+  MAINTAIN
+  HEALTHY // general healthy eating, no weight target
+}
+
+enum ActivityLevel {
+  SEDENTARY // little/no exercise
+  LIGHT // 1-3 days/week
+  MODERATE // 3-5 days/week
+  ACTIVE // 6-7 days/week
+  VERY_ACTIVE // hard daily training / physical job
+}
+
+enum BudgetTier {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum Cuisine {
+  GHANAIAN
+  WEST_AFRICAN
+  INTERNATIONAL
+}
+
+enum MealSlot {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum VideoSource {
+  YOUTUBE
+  TIKTOK
+  INSTAGRAM
+}
+
+enum Plan {
+  FREE
+  PREMIUM
+}
+
+// ---------------------------------------------------------------------------
+// User & profile
+// ---------------------------------------------------------------------------
+
+// Mirrors a Supabase auth user. `id` equals the Supabase auth.users UUID so we
+// never duplicate identity; this row holds the app-domain profile only.
+model User {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile     Profile?
+  entitlement Entitlement?
+  mealPlans   MealPlan[]
+  weightLogs  WeightLog[]
+
+  @@map("users")
+}
+
+model Profile {
+  id     String @id @default(cuid())
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Inputs
+  age           Int
+  sex           Sex
+  heightCm      Float
+  weightKg      Float
+  activityLevel ActivityLevel
+  goal          Goal
+  budgetTier    BudgetTier @default(MEDIUM)
+
+  // Preferences — stored as string arrays for v1 (tags/free-text).
+  // Allergies and dislikes are hard filters; restrictions (e.g. "vegetarian")
+  // map to dish tags in the generator.
+  dietaryRestrictions String[] @default([])
+  allergies           String[] @default([])
+  dislikes            String[] @default([])
+
+  // Computed targets (denormalized snapshot from the macro module; recomputed
+  // whenever inputs change so the Today view never recalculates on read).
+  calorieTarget Int
+  proteinG      Int
+  carbsG        Int
+  fatG          Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+// Free vs premium boundary. Present now, everything unlocked in v1.
+model Entitlement {
+  id     String @id @default(cuid())
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plan Plan @default(FREE)
+
+  // Feature flags — all true in v1 regardless of plan.
+  aiRecommendations Boolean @default(true)
+  groceryList       Boolean @default(true)
+  progressTracking  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("entitlements")
+}
+
+// ---------------------------------------------------------------------------
+// Food database
+// ---------------------------------------------------------------------------
+
+model Ingredient {
+  id       String   @id @default(cuid())
+  name     String   @unique
+  // Macros per 100g, the canonical unit for ingredients.
+  kcal     Float
+  proteinG Float
+  carbsG   Float
+  fatG     Float
+  tags     String[] @default([])
+
+  recipeItems RecipeIngredient[]
+
+  @@map("ingredients")
+}
+
+// A Dish is the plannable unit (what lands on the timetable). Macros are stored
+// per serving so the generator can scale by `servings` without re-deriving from
+// ingredients. Ingredients are attached for the future grocery list (v2).
+model Dish {
+  id       String  @id @default(cuid())
+  slug     String  @unique
+  name     String
+  cuisine  Cuisine @default(GHANAIAN)
+  // Which meal slots this dish naturally fits. Drives the generator.
+  slots    MealSlot[]
+  servings Int     @default(1)
+
+  // Per-serving macros.
+  kcal     Int
+  proteinG Int
+  carbsG   Int
+  fatG     Int
+
+  tags           String[] @default([]) // high-protein, budget, weight-gain, vegetarian, ...
+  prepTimeMin    Int?
+  shortDesc      String?
+
+  // Creator attribution (v2). Nullable: v1 dishes are app-curated.
+  creatorId String?
+  creator   Creator? @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+
+  ingredients  RecipeIngredient[]
+  videos       Video[]
+  plannedMeals PlannedMeal[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cuisine])
+  @@map("dishes")
+}
+
+model RecipeIngredient {
+  id           String     @id @default(cuid())
+  dishId       String
+  dish         Dish       @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  // Quantity in grams per the dish's base `servings`.
+  grams        Float
+
+  @@unique([dishId, ingredientId])
+  @@map("recipe_ingredients")
+}
+
+// ---------------------------------------------------------------------------
+// Creators & videos (creator schema now, onboarding later)
+// ---------------------------------------------------------------------------
+
+model Creator {
+  id        String  @id @default(cuid())
+  name      String
+  handle    String  @unique
+  bio       String?
+  youtube   String?
+  tiktok    String?
+  instagram String?
+
+  dishes Dish[]
+  videos Video[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("creators")
+}
+
+model Video {
+  id     String      @id @default(cuid())
+  dishId String
+  dish   Dish        @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  source VideoSource @default(YOUTUBE)
+  // The raw url AND the platform id, so the embed component can rebuild the
+  // iframe src per source without re-parsing the url.
+  url        String
+  platformId String
+  title      String?
+
+  // One dish can have several tutorials; mark the recommended/prioritized one.
+  isRecommended Boolean @default(false)
+
+  creatorId String?
+  creator   Creator? @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([dishId])
+  @@map("videos")
+}
+
+// ---------------------------------------------------------------------------
+// Meal plans
+// ---------------------------------------------------------------------------
+
+model MealPlan {
+  id        String   @id @default(cuid())
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Monday of the plan week (date-only semantics, stored at UTC midnight).
+  weekStart DateTime @db.Date
+
+  meals PlannedMeal[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, weekStart])
+  @@map("meal_plans")
+}
+
+model PlannedMeal {
+  id         String   @id @default(cuid())
+  mealPlanId String
+  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+
+  dayOfWeek Int // 0 = Monday ... 6 = Sunday
+  slot      MealSlot
+  dishId    String
+  dish      Dish     @relation(fields: [dishId], references: [id], onDelete: Restrict)
+  servings  Float    @default(1)
+
+  @@index([mealPlanId])
+  @@map("planned_meals")
+}
+
+// ---------------------------------------------------------------------------
+// Progress (v2)
+// ---------------------------------------------------------------------------
+
+model WeightLog {
+  id       String   @id @default(cuid())
+  userId   String   @db.Uuid
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date     DateTime @db.Date
+  weightKg Float
+
+  @@unique([userId, date])
+  @@map("weight_logs")
+}

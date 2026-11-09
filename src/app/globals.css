@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Aduane theme — warm, food-forward. Jollof-spice primary, kontomire-green
+   accent, kente-gold highlight, warm cream surfaces.
+   Tokens are defined on :root and remapped for dark mode, then exposed to
+   Tailwind via @theme inline so utilities like bg-primary / text-muted work.
+--------------------------------------------------------------------------- */
+
+:root {
+  --background: #fbf7f0;
+  --surface: #ffffff;
+  --surface-2: #f5efe4;
+  --foreground: #1f1a14;
+  --muted: #6b6155;
+  --border: #ece3d6;
+
+  --primary: #d1410c;
+  --primary-hover: #b8380a;
+  --primary-foreground: #ffffff;
+  --primary-soft: #fbe7dc;
+
+  --accent: #2f7d4f;
+  --accent-soft: #e4f1e9;
+
+  --gold: #c9870a;
+
+  --success: #2f7d4f;
+  --danger: #c23b22;
+
+  --ring: #d1410c;
+
+  --radius: 0.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #17130e;
+    --surface: #211b14;
+    --surface-2: #2a2219;
+    --foreground: #f6efe4;
+    --muted: #a89a86;
+    --border: #352b20;
+
+    --primary: #f2662e;
+    --primary-hover: #f4784a;
+    --primary-foreground: #1a0f08;
+    --primary-soft: #3a2318;
+
+    --accent: #4fb07a;
+    --accent-soft: #1d2f24;
+
+    --gold: #f0b429;
+
+    --success: #4fb07a;
+    --danger: #e26a52;
+
+    --ring: #f2662e;
+  }
+}
+
+:root[data-theme="dark"] {
+  --background: #17130e;
+  --surface: #211b14;
+  --surface-2: #2a2219;
+  --foreground: #f6efe4;
+  --muted: #a89a86;
+  --border: #352b20;
+
+  --primary: #f2662e;
+  --primary-hover: #f4784a;
+  --primary-foreground: #1a0f08;
+  --primary-soft: #3a2318;
+
+  --accent: #4fb07a;
+  --accent-soft: #1d2f24;
+
+  --gold: #f0b429;
+
+  --success: #4fb07a;
+  --danger: #e26a52;
+
+  --ring: #f2662e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-gold: var(--gold);
+
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-ring: var(--ring);
+
+  --radius-card: var(--radius);
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Consistent, visible focus for keyboard users. */
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
