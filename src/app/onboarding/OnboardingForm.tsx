@@ -15,6 +15,7 @@ import type {
   MacroTargets,
   Sex,
 } from "@/lib/nutrition/types";
+import { saveProfileSnapshot } from "@/lib/profile-store";
 import { completeOnboarding } from "./actions";
 
 const RESTRICTION_OPTIONS = [
@@ -88,6 +89,18 @@ export function OnboardingForm() {
     startTransition(async () => {
       const result = await completeOnboarding(payload);
       if (result.ok && result.targets) {
+        // Cache locally so the plan works before auth is wired up.
+        saveProfileSnapshot({
+          goal: goal!,
+          targets: result.targets,
+          preferences: {
+            allergies: splitList(allergies),
+            dislikes: splitList(dislikes),
+            restrictions,
+            budgetTier,
+          },
+          seed: Math.floor(Math.random() * 1_000_000) + 1,
+        });
         setDone(result.targets);
         setPersisted(result.persisted);
       } else {
